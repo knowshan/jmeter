@@ -1,21 +1,32 @@
-sudo: false
-language: java
+sudo: required
 
-before_script:
-  - test "x$RUN_CHECKSTYLE" != 'x' || ant -Djava.awt.headless=true download_jars install
-  - test "x$RUN_CHECKSTYLE" != 'xtrue' || ant -Djava.awt.headless=true download_checkstyle
+language: bash
 
-# skip default "install" command
-install: true
+branches:
+  only:
+    - v3_0-RPM
 
-matrix:
-  include:
-    - jdk: oraclejdk8
-      env: RUN_CHECKSTYLE=true
-      script: ant -Djava.awt.headless=true checkstyle
-    - jdk: oraclejdk7
-      script: ant -Djava.awt.headless=true test
-      sudo: true # otherwise TEST_HTTPS.jmx -> sni.velox.ch does not work
-    - jdk: oraclejdk8
-      script: ant -Djava.awt.headless=true test
-      sudo: true # otherwise TEST_HTTPS.jmx -> sni.velox.ch does not work
+env:
+  - WORKSPACE='/project'
+
+services:
+  - docker
+
+language: bash
+
+before_install:
+  - sudo docker pull knowshan/centos-buildsys
+  - gem install package_cloud
+
+install:
+  - sudo docker run -d -it -e WORKSPACE="${WORKSPACE}" -e TRAVIS_REPO_SLUG="${TRAVIS_REPO_SLUG}" -e TRAVIS_BUILD_NUMBER="${TRAVIS_BUILD_NUMBER}" -v $PWD:"${WORKSPACE}" --name centos6 knowshan/centos-buildsys
+
+script:
+  - sudo docker exec centos6 mkrpm
+
+after_success:
+  - package_cloud push knowshan/ec2/el/6 build_"${TRAVIS_BUILD_NUMBER}"/*.rpm
+
+after_script:
+  - sudo docker stop centos6
+
